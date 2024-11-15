@@ -1,0 +1,72 @@
+# This thinkScript study identifies "Squeeze" and "Balloon" conditions using a set of Bollinger Bands and two sets of Keltner Channels. The conditions are checked on both the current chart timeframe and a user-defined higher timeframe.
+
+# Define input parameters
+input period = AggregationPeriod.DAY; # User-defined higher timeframe
+def bbAvgType = AverageType.SIMPLE;
+def kcAvgType = AverageType.SIMPLE;
+def length = 20; # Length of moving averages
+def bbMultiplier = 2.0; # Default multiplier for Bollinger Bands is 2.0
+def kc1Multiplier = 1.5; # Default multiplier for "Inner" Keltner Channel is 1.5
+def kc2Multiplier = 5.0; # Default multiplier for "Outer" Keltner Channel is 5.0
+
+# Calculate Bollinger Bands on the chart timeframe
+def price = close;
+def bbUpper = MovingAverage(bbAvgType, price, length) + bbMultiplier * StDev(price, length);
+def bbLower = MovingAverage(bbAvgType, price, length) - bbMultiplier * StDev(price, length);
+
+# Calculate "Inner" (kc1) and "Outer" (kc2) Keltner Channels on the chart timeframe
+def atr = MovingAverage(kcAvgType, TrueRange(high, close, low), length);
+def kc1Upper = MovingAverage(kcAvgType, price, length) + kc1Multiplier * atr;
+def kc1Lower = MovingAverage(kcAvgType, price, length) - kc1Multiplier * atr;
+def kc2Upper = MovingAverage(kcAvgType, price, length) + kc2Multiplier * atr;
+def kc2Lower = MovingAverage(kcAvgType, price, length) - kc2Multiplier * atr;
+
+# Calculate Bollinger Bands on the user-defined higher timeframe
+def u_price = close(period = period);
+def u_bbUpper = MovingAverage(bbAvgType, u_price, length) + bbMultiplier * StDev(u_price, length);
+def u_bbLower = MovingAverage(bbAvgType, u_price, length) - bbMultiplier * StDev(u_price, length);
+
+# Calculate "Inner" (kc1) and "Outer" (kc2) Keltner Channels on the user-defined higher timeframe
+def u_atr = MovingAverage(kcAvgType, TrueRange(high(period = period), close(period = period), low(period = period)), length);
+def u_kc1Upper = MovingAverage(kcAvgType, u_price, length) + kc1Multiplier * u_atr;
+def u_kc1Lower = MovingAverage(kcAvgType, u_price, length) - kc1Multiplier * u_atr;
+def u_kc2Upper = MovingAverage(kcAvgType, u_price, length) + kc2Multiplier * u_atr;
+def u_kc2Lower = MovingAverage(kcAvgType, u_price, length) - kc2Multiplier * u_atr;
+
+# Define colors for each Squeeze and Balloon condition
+DefineGlobalColor("Pure Squeeze", Color.BLUE);
+DefineGlobalColor("Double Squeeze", Color.CYAN);
+DefineGlobalColor("Pure Balloon", Color.YELLOW);
+DefineGlobalColor("Double Balloon", Color.MAGENTA);
+DefineGlobalColor("Dirty Squeeze", Color.ORANGE);
+DefineGlobalColor("Dirty Balloon", Color.PINK);
+
+# Define Squeeze and Balloon conditions
+# Pure Squeeze: Bollinger Bands inside "Inner" Keltner Channels (Squeeze) on the chart timeframe, no Squeeze/Balloon on user defined higher timeframe
+def pureSqueeze = if bbUpper <= kc1Upper and bbLower >= kc1Lower and !(u_bbUpper <= u_kc1Upper and u_bbLower >= u_kc1Lower) and !(u_bbUpper >= u_kc2Upper and u_bbLower <= u_kc2Lower)
+then Double.POSITIVE_INFINITY else Double.NEGATIVE_INFINITY;
+
+# Double Squeeze: Bollinger Bands inside "Inner" Keltner Channels on both chart and user-defined timeframes
+def doubleSqueeze = if bbUpper <= kc1Upper and bbLower >= kc1Lower and u_bbUpper <= u_kc1Upper and u_bbLower >= u_kc1Lower then Double.POSITIVE_INFINITY else Double.NEGATIVE_INFINITY;
+
+# Pure Balloon: Bollinger Bands outside "Outer" Keltner Channels (Balloon) on the chart timeframe, no Squeeze/Balloon on user defined timeframe
+def pureBalloon = if bbUpper >= kc2Upper and bbLower <= kc2Lower and !(u_bbUpper <= u_kc1Upper and u_bbLower >= u_kc1Lower) and !(u_bbUpper >= u_kc2Upper and u_bbLower <= u_kc2Lower)
+then Double.POSITIVE_INFINITY else Double.NEGATIVE_INFINITY;
+
+# Double Balloon: Bollinger Bands outside "Outer" Keltner Channels on both chart and user-defined timeframes
+def doubleBalloon = if bbUpper >= kc2Upper and bbLower <= kc2Lower and u_bbUpper >= u_kc2Upper and u_bbLower <= u_kc2Lower then Double.POSITIVE_INFINITY else Double.NEGATIVE_INFINITY;
+
+# Dirty Squeeze: Squeeze on chart timeframe and Balloon on user-defined timeframe
+def dirtySqueeze = if bbUpper <= kc1Upper and bbLower >= kc1Lower and u_bbUpper >= u_kc2Upper and u_bbLower <= u_kc2Lower then Double.POSITIVE_INFINITY else Double.NEGATIVE_INFINITY;
+
+# Dirty Balloon: Balloon on chart timeframe and Squeeze on user-defined timeframe
+def dirtyBalloon = if bbUpper >= kc2Upper and bbLower <= kc2Lower and u_bbUpper <= u_kc1Upper and u_bbLower >= u_kc1Lower then Double.POSITIVE_INFINITY else Double.NEGATIVE_INFINITY;
+
+# Plot conditions as clouds
+AddCloud(pureSqueeze,doubleSqueeze, GlobalColor("Pure Squeeze"), GlobalColor("Double Squeeze"));
+AddCloud(pureBalloon, doubleBalloon, GlobalColor("Pure Balloon"), GlobalColor("Double Balloon"));
+AddCloud(dirtySqueeze, dirtyBalloon, GlobalColor("Dirty Squeeze"), GlobalColor("Dirty Balloon"));
+
+# Plot line to visualize the volatility cycle (Squeeze on chart timeframe when delta <= 0.0).
+# Note: This line plot will display as intended only if this script is the first study in the Lower subgraph, or if the subgraph is already set to a Percentage-based (0–100%) scale.
+plot delta = bbUpper - kc1Upper;
